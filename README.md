@@ -72,6 +72,45 @@ Sent <n> DHAV audio frames to the camera.
 
 `200 OK` plus frames sent verifies the P2P/VisualTalk transport; it is not by itself proof that the camera speaker is audible. If no sound is heard, tune the gain/codec/channel for the installed camera firmware.
 
+## Listen to the camera mic (RTSP + VAD, separate from talkback)
+
+Talkback (`visualtalk.xav`) is the machine-to-speaker direction. Mic capture
+uses the live RTSP stream instead (`src/imou_talk/imou_rtsp_listen.py`):
+
+```text
+camera mic -> RTSP :554 /cam/realmonitor -> ffmpeg audio-only
+-> PCM 16k mono -> energy VAD -> speech segments -> Vosk (vi)
+```
+
+LAN (same network as the camera):
+
+```powershell
+.\scripts\listen-camera-rtsp.ps1 -Seconds 30 -Vu
+```
+
+Remote (P2P relay to camera port 554, then RTSP locally):
+
+```powershell
+.\scripts\listen-camera-rtsp.ps1 -ViaP2p -Seconds 30 -Vu
+```
+
+Key options: `-VadThreshold 0.03` (room silence p50 ~0.022, speech ~0.05+),
+`-MinSegRms 0.025` (segment-level noise gate), `-MaxSegmentS 8` (small Vosk
+model degrades on longer segments), `-SilenceMs 800`, `-MinSpeechMs 300`,
+`-InhibitFile <path>` (create this
+file while the speaker plays TTS; ASR pauses plus a cooldown, PCM keeps
+draining). Only speech segments reach Vosk, so room/comfort noise no longer
+produces hallucinated transcripts. The legacy VisualTalk listener
+(`listen-camera-stt.ps1`) also gained the same input-side gate
+(`-VadThreshold`, `-InhibitFile`); the speak path is untouched.
+
+If RTSP refuses connections (RST / `Failed reading RTSP data -10054`) while
+VisualTalk still returns `200 OK`, the camera's RTSP service is locked or
+down: wait out the login lockout, reboot via the Imou app, confirm the LAN
+IP and device password, and ensure RTSP/ONVIF is enabled. Verified working
+profile earlier: `channel=1 subtype=0/1`, audio `AAC LC 16 kHz mono`
+(`subtype=1` is lighter: H264 640x480).
+
 ## Security and scope
 
 Use this only with cameras and accounts you own or are authorized to administer. This is interoperability/research code, not an official Imou SDK. Firmware and cloud-side protocol changes can break it.

@@ -9,3 +9,9 @@ __pycache__/
 .idea/
 Thumbs.db
 Desktop.ini
+
+# Local STT model + captures (large / machine-local)
+models/
+*.wav
+*.raw
+*.bin
