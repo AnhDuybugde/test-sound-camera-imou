@@ -1,0 +1,11 @@
+# Camera credentials and machine-local files
+.env
+.cache/
+__pycache__/
+*.py[cod]
+
+# Editor and OS state
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
