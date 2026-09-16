@@ -313,6 +313,7 @@ def run_rtsp_listen(args, rtsp_url: str) -> int:
     n_segments = 0
     n_speech_frames = 0
     n_total_frames = 0
+    transcript_log: list[dict] = []
     start = time.monotonic()
     last_vu = 0.0
     leftover = bytearray()
@@ -334,6 +335,8 @@ def run_rtsp_listen(args, rtsp_url: str) -> int:
         seg_rms = rms_level(seg_bytes)
         if seg_rms < args.min_seg_rms:
             n_segments += 1
+            transcript_log.append({"t": round(el, 2), "dur_s": round(dur, 2),
+                                   "status": "skip-noise", "rms": round(seg_rms, 5)})
             if args.debug or args.vu:
                 print(f"\n[{el:6.1f}s] skip noise seg "
                       f"{dur:.1f}s rms={seg_rms:.4f}", flush=True)
@@ -349,6 +352,9 @@ def run_rtsp_listen(args, rtsp_url: str) -> int:
             use_agc=not args.no_agc,
         )
         if seg_reject and not args.no_quality_gate:
+            transcript_log.append({"t": round(el, 2), "dur_s": round(dur, 2),
+                                   "status": "skip-lowq", "reason": seg_reject,
+                                   **{k: seg_q[k] for k in ("rms", "snr_db", "zcr")}})
             if args.debug or args.vu:
                 print(f"\n[{el:6.1f}s] skip low-q seg "
                       f"{dur:.1f}s {seg_reject} rms={seg_q['rms']} "
@@ -368,6 +374,8 @@ def run_rtsp_listen(args, rtsp_url: str) -> int:
                 print(f"\ndump warn: {exc}", flush=True)
                 seg_path = ""
         if args.no_stt or (vosk_model is None and fw_model is None):
+            transcript_log.append({"t": round(el, 2), "dur_s": round(dur, 2),
+                                   "status": "stt-off", "path": seg_path})
             print(f"\n[{el:6.1f}s] speech {dur:.1f}s (STT off)"
                   + (f" -> {seg_path}" if seg_path else ""), flush=True)
         else:
@@ -379,6 +387,9 @@ def run_rtsp_listen(args, rtsp_url: str) -> int:
             tag = f" -> {seg_path}" if seg_path else ""
             qtag = (f" [rms={seg_q['rms']} snr={seg_q['snr_db']}dB "
                     f"zcr={seg_q['zcr']} g={seg_q['gain']}]") if args.debug else ""
+            transcript_log.append({"t": round(el, 2), "dur_s": round(dur, 2),
+                                   "status": "ok", "text": text, "path": seg_path,
+                                   **{k: seg_q[k] for k in ("rms", "snr_db", "zcr", "gain")}})
             if text:
                 print(f"\n[{el:6.1f}s] {text}{tag}{qtag}", flush=True)
             elif args.debug:
@@ -489,9 +500,25 @@ def run_rtsp_listen(args, rtsp_url: str) -> int:
                 print(f"Saved PCM 16k mono to {args.dump_wav}", flush=True)
             except Exception:
                 pass
+        if getattr(args, "dump_json", ""):
+            try:
+                import json as _json
+                with open(args.dump_json, "w", encoding="utf-8") as jf:
+                    _json.dump({"wav": args.dump_wav,
+                                "stt": getattr(args, "stt", "vosk"),
+                                "fw_model": getattr(args, "fw_model", ""),
+                                "segments": transcript_log},
+                               jf, ensure_ascii=False, indent=2)
+                print(f"Saved transcript JSON to {args.dump_json}", flush=True)
+            except OSError as exc:
+                print(f"dump json warn: {exc}", flush=True)
         el = time.monotonic() - start
         print(f"\nDone: {el:.1f}s, {n_total_frames} frames, "
               f"{n_segments} speech segments.", flush=True)
+        if n_segments == 0 and n_total_frames > 0:
+            print("Hint: 0 segment = VAD khong bat tieng. Noi to/gan camera hon, "
+                  "kiem tra cot VU (speech ~0.05+), thu --vad-threshold 0.02 "
+                  "hoac --debug de xem muc nhieu nen.", flush=True)
     return 0
 
 
@@ -597,6 +624,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--vu", action="store_true")
     p.add_argument("--dump-wav", default="", help="save decoded PCM as wav (default: auto audio/rtsp-YYYYMMDD-HHMMSS.wav)")
     p.add_argument("--dump-segments", default="")
+    p.add_argument("--dump-json", default="",
+                   help="save transcript segments as JSON (default: auto <dump-wav>.json)")
     p.add_argument("--no-auto-dump", action="store_true", help="disable auto WAV save to audio/")
     p.add_argument("--debug", action="store_true")
     args = p.parse_args()
@@ -608,6 +637,8 @@ def parse_args() -> argparse.Namespace:
             args.dump_wav = str(_audio_dir / f"rtsp-{_stamp}.wav")
         except OSError:
             args.dump_wav = ""
+    if not args.dump_json and args.dump_wav and not args.no_auto_dump:
+        args.dump_json = str(Path(args.dump_wav).with_suffix(".json"))
     return args
 
 

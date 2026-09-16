@@ -7,6 +7,7 @@ param(
     [string]$Model = "models/vosk-model-small-vn-0.4",
     [string]$DumpWav = "",
     [string]$DumpSegments = "",
+    [string]$DumpJson = "",
     [string]$InhibitFile = "",
     [double]$VadThreshold = 0.03,
     [double]$MinSegRms = 0.025,
@@ -82,6 +83,7 @@ if ($RtspUrl -ne "") { $taskArgs += @("--rtsp-url", $RtspUrl) } else { $taskArgs
 if ($ViaP2p) { $taskArgs += "--via-p2p"; $taskArgs += @("--serial", $taskEnv.IMOU_DEVICE_ID) }
 if ($DumpWav -ne "") { $taskArgs += @("--dump-wav", $DumpWav) }
 if ($DumpSegments -ne "") { $taskArgs += @("--dump-segments", $DumpSegments) }
+if ($DumpJson -ne "") { $taskArgs += @("--dump-json", $DumpJson) }
 if ($InhibitFile -ne "") { $taskArgs += @("--inhibit-file", $InhibitFile) }
 if ($AudioFilter -ne "") { $taskArgs += @("--audio-filter", $AudioFilter) }
 if ($Denoise -ne "" -and $Denoise -ne "off") { $taskArgs += @("--denoise", $Denoise) }

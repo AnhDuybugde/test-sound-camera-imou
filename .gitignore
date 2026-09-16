@@ -21,3 +21,4 @@ audio/baseline-*.json
 audio/eval-*.json
 audio/tts-cases.json
 audio/rtsp-*.wav
+audio/rtsp-*.json
