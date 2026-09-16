@@ -104,6 +104,56 @@ produces hallucinated transcripts. The legacy VisualTalk listener
 (`listen-camera-stt.ps1`) also gained the same input-side gate
 (`-VadThreshold`, `-InhibitFile`); the speak path is untouched.
 
+### Pre-processing + STT engines (P1-P4, Ubuntu)
+
+Direct `python` runs auto-load `.env` (`src/imou_talk/imou_env.py`), auto-save
+each run to `audio/rtsp-YYYYMMDD-HHMMSS.wav`, and take `--ip/--username`
+defaults from `IMOU_IP`/`IMOU_USER`, so this is enough:
+
+```bash
+python3 -u src/imou_talk/imou_rtsp_listen.py --seconds 30 --vu
+```
+
+New listen flags (also on `listen-camera-rtsp.ps1` as `-AudioFilter`,
+`-Denoise`, `-Stt`, `-FwModel`):
+
+- `--audio-filter` (default `highpass=f=80,afftdn=nr=12:nf=-25`),
+  `--no-audio-filter` — ffmpeg pre-filter before VAD/STT.
+- `--denoise rnnoise` (+ `--denoise-model models/rnnoise/cb.rnnn`,
+  `--denoise-mix 0.9`) — RNNoise via `arnndn`. Download once:
+  `curl -o models/rnnoise/cb.rnnn https://raw.githubusercontent.com/richardpl/arnndn-models/master/cb.rnnn`.
+- `--no-agc` / `--agc-target 0.12` / `--min-snr-db 4.0` /
+  `--no-quality-gate` — Python DSP in `src/imou_talk/imou_audio_pre.py`
+  (DC-block, per-segment AGC + limiter, SNR/ZCR gate; `--debug` prints
+  `rms/snr/zcr/gain` per segment).
+- `--stt faster-whisper` (default) + `--fw-model medium` (default) +
+  `--fw-lang vi` — fw-small nhanh hơn (~2.6x) nhưng WER cao hơn ~50% tương
+  đối; `--stt vosk` giữ lại làm fallback. Ubuntu:
+  `pip3 install --user faster-whisper` (model downloads to
+  `~/.cache/huggingface` on first run).
+
+Measured on the bundled captures (Ubuntu 22.04, ffmpeg 4.4):
+
+| file | Vosk-small | faster-whisper tiny | faster-whisper small |
+|---|---|---|---|
+| `audio/camera-test-vi.wav` (clean) | wrong (`...cảm mẹ già`) | `Xin chào, đây là thử là camera.` (0.2s) | `Xin chào, đây là Thử Lo Camera.` (1.0s) |
+| `audio/rtsp-*.wav` (noisy cam) | word-salad hallucination | shorter hallucination | numbers hallucination |
+
+Takeaway: Vosk-small is the bottleneck even on clean audio; default is now
+`--stt faster-whisper --fw-model medium` for Vietnamese accuracy (still
+realtime: RTF ~0.4 on CPU; `small` is ~2.6x faster at ~50% higher WER).
+Denoise lowers the noise floor
+(RMS p50 0.008 → 0.002, VAD hits 23% → 16%) but cannot fix a weak model.
+
+Offline replay for tuning (no camera needed — a local `.wav` goes through
+the same ffmpeg → VAD → pre → STT path, trailing segments are flushed):
+
+```bash
+python3 -u src/imou_talk/imou_rtsp_listen.py --rtsp-url audio/rtsp-XXX.wav --vu --debug --no-auto-dump
+python3 scripts/eval_baseline.py            # RMS/DC/clip/VAD/Vosk per file -> audio/baseline-*.json
+python3 scripts/eval_stt.py --fw-models tiny,small   # vosk vs whisper -> audio/eval-stt-*.json
+```
+
 If RTSP refuses connections (RST / `Failed reading RTSP data -10054`) while
 VisualTalk still returns `200 OK`, the camera's RTSP service is locked or
 down: wait out the login lockout, reboot via the Imou app, confirm the LAN

@@ -47,6 +47,12 @@ except ImportError:
     from imou_dhp2p import DHP2PTunnel, p2p_handshake  # type: ignore[no-redef]
     from imou_visualtalk import VisualTalkClient  # type: ignore[no-redef]
 
+try:
+    from imou_env import load_repo_dotenv
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from imou_env import load_repo_dotenv  # type: ignore[no-redef]
+
 VI_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-vn-0.4.zip"
 VI_MODEL_NAME = "vosk-model-small-vn-0.4"
 TARGET_PCM_RATE = 16000
@@ -486,6 +492,7 @@ async def listen_once(args) -> int:
 
 
 def parse_args() -> argparse.Namespace:
+    load_repo_dotenv()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--device-json", default="standalone-app/out/assets/device.json")
     p.add_argument("--device-index", type=int, default=0)

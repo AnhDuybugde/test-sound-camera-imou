@@ -31,6 +31,12 @@ except ImportError:
     from imou_dhp2p import DHP2PTunnel, p2p_handshake  # type: ignore[no-redef]
     from imou_visualtalk import VisualTalkClient  # type: ignore[no-redef]
 
+try:
+    from imou_env import load_repo_dotenv
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from imou_env import load_repo_dotenv  # type: ignore[no-redef]
+
 
 DEFAULT_DEVICE_JSON = Path("standalone-app/out/assets/device.json")
 
@@ -248,6 +254,7 @@ def run_visualtalk(args: argparse.Namespace, password: str, audio: bytes) -> int
 
 
 def parse_args() -> argparse.Namespace:
+    load_repo_dotenv()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device-json", default=str(DEFAULT_DEVICE_JSON))
     parser.add_argument("--device-index", type=int, default=0)

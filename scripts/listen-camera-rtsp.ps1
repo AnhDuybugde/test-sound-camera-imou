@@ -13,6 +13,11 @@ param(
     [double]$MaxSegmentS = 8,
     [int]$SilenceMs = 800,
     [int]$MinSpeechMs = 300,
+    [string]$AudioFilter = "",
+    [string]$Denoise = "off",
+    [string]$Stt = "faster-whisper",
+    [string]$FwModel = "medium",
+    [switch]$NoAudioFilter,
     [switch]$ViaP2p,
     [switch]$NoStt,
     [switch]$Vu,
@@ -54,10 +59,18 @@ $env:Path = (Split-Path $taskFfmpeg) + ';' + $env:Path
 $env:IMOU_CAMERA_PASSWORD = $taskPass
 
 python -c "import vosk" 2>$null
-if ($LASTEXITCODE -ne 0 -and !$NoStt) {
+if ($LASTEXITCODE -ne 0 -and !$NoStt -and $Stt -eq "vosk") {
     Write-Host "Installing vosk (one time)..." -ForegroundColor Yellow
     python -m pip install vosk
     if ($LASTEXITCODE -ne 0) { throw "Failed to install vosk" }
+}
+if ($Stt -ne "vosk" -and !$NoStt) {
+    python -c "import faster_whisper" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Installing faster-whisper (one time)..." -ForegroundColor Yellow
+        python -m pip install faster-whisper
+        if ($LASTEXITCODE -ne 0) { throw "Failed to install faster-whisper" }
+    }
 }
 
 $taskArgs = @("-u", $taskListener, "--username", $taskUser, "--password", $taskPass,
@@ -70,6 +83,11 @@ if ($ViaP2p) { $taskArgs += "--via-p2p"; $taskArgs += @("--serial", $taskEnv.IMO
 if ($DumpWav -ne "") { $taskArgs += @("--dump-wav", $DumpWav) }
 if ($DumpSegments -ne "") { $taskArgs += @("--dump-segments", $DumpSegments) }
 if ($InhibitFile -ne "") { $taskArgs += @("--inhibit-file", $InhibitFile) }
+if ($AudioFilter -ne "") { $taskArgs += @("--audio-filter", $AudioFilter) }
+if ($Denoise -ne "" -and $Denoise -ne "off") { $taskArgs += @("--denoise", $Denoise) }
+if ($Stt -ne "" -and $Stt -ne "vosk") { $taskArgs += @("--stt", $Stt) }
+if ($FwModel -ne "") { $taskArgs += @("--fw-model", $FwModel) }
+if ($NoAudioFilter) { $taskArgs += "--no-audio-filter" }
 if ($NoStt) { $taskArgs += "--no-stt" }
 if ($Vu) { $taskArgs += "--vu" }
 if ($Debug) { $taskArgs += "--debug" }
