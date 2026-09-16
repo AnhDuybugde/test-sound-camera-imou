@@ -201,7 +201,9 @@ def run_rtsp_listen(args, rtsp_url: str) -> int:
         try:
             from faster_whisper import WhisperModel  # type: ignore
         except ImportError:
-            print("Missing dependency: pip3 install --user faster-whisper", file=sys.stderr)
+            _in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
+            _hint = "pip install faster-whisper" if _in_venv else "pip3 install --user faster-whisper"
+            print(f"Missing dependency: {_hint}", file=sys.stderr)
             return 2
         print(f"Loading faster-whisper {args.fw_model} (int8 CPU) ...", flush=True)
         fw_model = WhisperModel(args.fw_model, device="cpu", compute_type="int8")
